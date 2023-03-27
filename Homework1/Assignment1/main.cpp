@@ -3,9 +3,11 @@
 #include <eigen3/Eigen/Eigen>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <cmath>
 
 constexpr double MY_PI = 3.1415926;
 
+// move camera to eye position
 Eigen::Matrix4f get_view_matrix(Eigen::Vector3f eye_pos)
 {
     Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
@@ -22,11 +24,17 @@ Eigen::Matrix4f get_view_matrix(Eigen::Vector3f eye_pos)
 Eigen::Matrix4f get_model_matrix(float rotation_angle)
 {
     Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
-
-    // TODO: Implement this function
-    // Create the model matrix for rotating the triangle around the Z axis.
-    // Then return it.
-
+    // using rad mode
+    float rotation_angle_rad = rotation_angle / 180.0f * (float) MY_PI;
+    // calc rotation mat
+    Eigen::Matrix4f rotation_mat {
+        {cos(rotation_angle_rad), -sin(rotation_angle_rad), 0, 0},
+        {sin(rotation_angle_rad), cos(rotation_angle_rad), 0, 0},
+        {0, 0, 1, 0},
+        {0, 0, 0, 1},
+    };
+    // merge
+    model = rotation_mat * model;
     return model;
 }
 
@@ -34,13 +42,29 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
                                       float zNear, float zFar)
 {
     // Students will implement this function
-
     Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
-
-    // TODO: Implement this function
-    // Create the projection matrix for the given parameters.
-    // Then return it.
-
+    // calculate related parameters
+    float angle = eye_fov / 180 * (float) MY_PI;
+    float t = fabs(zNear) * tan(angle / 2);
+    float b = -t;
+    float r = (t - b) * aspect_ratio / 2.0f;
+    float l = -r;
+    // Perspective Projection Mat
+    Eigen::Matrix4f perspective_mat {
+        {zNear, 0, 0, 0},
+        {0, zNear, 0, 0},
+        {0, 0, zNear + zFar, -zNear * zFar},
+        {0, 0, 0, 1},
+    };
+    // Orthogonal Projection Mat
+    Eigen::Matrix4f orthogonal_mat {
+        {2 / (r - l), 0, 0, -(l + r) / 2},
+        {0, 2 / (t - b), 0, -(b + t) / 2},
+        {0, 0, 2 / (zNear - zFar), -(zFar + zNear) / 2},
+        {0, 0, 0, 1},
+    };
+    // merge
+    projection = perspective_mat * orthogonal_mat;
     return projection;
 }
 

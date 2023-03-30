@@ -21,9 +21,41 @@ Eigen::Matrix4f get_view_matrix(Eigen::Vector3f eye_pos)
     return view;
 }
 
+Eigen::Matrix4f get_camera_matrix(Eigen::Vector3f eye_gaze,
+                                  Eigen::Vector3f eye_view_up,
+                                  Eigen::Vector3f eye_pos)
+{
+    Eigen::Vector3f w = -eye_gaze * (1.0f / eye_gaze.norm());
+    Eigen::Vector3f u = eye_view_up.cross(w) * (1.0f / (eye_view_up.cross(w)).norm());
+    Eigen::Vector3f v = w.cross(u);
+    Eigen::Matrix4f camera_to_world {
+            {u[0], v[0], w[0], eye_pos[0]},
+            {u[1], v[1], w[1], eye_pos[1]},
+            {u[2], v[2], w[2], eye_pos[2]},
+            {0, 0, 0, 1},
+    };
+    return camera_to_world.inverse();
+}
+
+Eigen::Matrix4f get_camera_world_basis(Eigen::Vector3f eye_gaze,
+                                       Eigen::Vector3f eye_view_up)
+{
+    Eigen::Vector3f w = -eye_gaze * (1.0f / eye_gaze.norm());
+    Eigen::Vector3f u = eye_view_up.cross(w) * (1.0f / (eye_view_up.cross(w)).norm());
+    Eigen::Vector3f v = w.cross(u);
+    Eigen::Matrix4f camera_world_basis {
+        {u[0], v[0], w[0], 0},
+        {u[1], v[1], w[1], 0},
+        {u[2], v[2], w[2], 0},
+        {0, 0, 0, 1},
+    };
+    return camera_world_basis;
+}
+
 Eigen::Matrix4f get_model_matrix(float rotation_angle)
 {
     Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
+    // Model Transformation
     // using rad mode
     float rotation_angle_rad = rotation_angle / 180.0f * (float) MY_PI;
     // calc rotation mat
@@ -33,28 +65,37 @@ Eigen::Matrix4f get_model_matrix(float rotation_angle)
         {0, 0, 1, 0},
         {0, 0, 0, 1},
     };
+    // do rotation in camera world
+    Eigen::Vector3f eye_gaze(0, 0, 1); // eye look up +z direction actually
+    Eigen::Vector3f eye_view_up(0, 1, 0);
+    Eigen::Matrix4f camera_basis = get_camera_world_basis(eye_gaze, eye_view_up);
     // merge
-    model = rotation_mat * model;
+    model = camera_basis * rotation_mat * model;
     return model;
 }
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
                                       float zNear, float zFar)
 {
-    // Students will implement this function
     Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
     // calculate related parameters
-    float angle = eye_fov / 180 * (float) MY_PI;
-    float t = fabs(zNear) * tan(angle / 2);
-    float b = -t;
-    float r = (t - b) * aspect_ratio / 2.0f;
-    float l = -r;
+    // Camera Transformation Matrix
+    // Since zNear and zFar are both positive
+    // We need to make it gaze to -z direction
+    // To achieve this, we do camera transformation
+    Eigen::Vector3f eye_gaze(0, 0, 1); // eye look up +z direction actually
+    Eigen::Vector3f eye_view_up(0, 1, 0);
+    Eigen::Vector3f eye_pos(0, 0, 5); // eye_pos is (0, 0, 5), see main() function
+    Eigen::Matrix4f camera_mat = get_camera_matrix(eye_gaze, eye_view_up, eye_pos);
     // Perspective Projection Mat
+    float angle = eye_fov / 180 * (float) MY_PI;
+    float t = fabs(zNear) * tan(angle / 2), b = -t;
+    float r = (t - b) * aspect_ratio / 2.0f, l = -r;
     Eigen::Matrix4f perspective_mat {
         {zNear, 0, 0, 0},
         {0, zNear, 0, 0},
         {0, 0, zNear + zFar, -zNear * zFar},
-        {0, 0, 0, 1},
+        {0, 0, 1, 0},
     };
     // Orthogonal Projection Mat
     Eigen::Matrix4f orthogonal_mat {
@@ -64,7 +105,7 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
         {0, 0, 0, 1},
     };
     // merge
-    projection = perspective_mat * orthogonal_mat;
+    projection = orthogonal_mat * perspective_mat * camera_mat;
     return projection;
 }
 

@@ -41,22 +41,20 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
 }
 
 
-static bool insideTriangle(int x, int y, const std::vector<Vector2f>& _v)
+static bool insideTriangle(int x, int y, const std::vector<Vector2f>& tri)
 {
-    // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by _v[0], _v[1], _v[2]
-    // z轴为0
+    // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by tri[0], tri[1], tri[2]
     Vector3f probe_point = {(float)x, (float)y, 0};
-    Vector3f vertex_A = {_v[0][0], _v[0][1], 0};
-    Vector3f vertex_B = {_v[1][0], _v[1][1], 0};
-    Vector3f vertex_C = {_v[2][0], _v[2][1], 0};
+    Vector3f vertex_A = {tri[0][0], tri[0][1], 0};
+    Vector3f vertex_B = {tri[1][0], tri[1][1], 0};
+    Vector3f vertex_C = {tri[2][0], tri[2][1], 0};
     Vector3f AB = vertex_B - vertex_A, AP = probe_point - vertex_A;
     Vector3f BC = vertex_C - vertex_B, BP = probe_point - vertex_B;
     Vector3f CA = vertex_A - vertex_C, CP = probe_point - vertex_C;
     // 叉积检测方向
-    float P_AB_relative = AB.cross(AP)[2];
-    float P_BC_relative = BC.cross(BP)[2];
-    float P_CA_relative = CA.cross(CP)[2];
-    // std::cout << P_AB_relative << " " << P_BC_relative << " " << P_CA_relative << std::endl;
+    float P_AB_relative = (AB.cross(AP))[2];
+    float P_BC_relative = (BC.cross(BP))[2];
+    float P_CA_relative = (CA.cross(CP))[2];
     return P_AB_relative < 0 && P_BC_relative < 0 && P_CA_relative < 0;
 }
 
@@ -124,7 +122,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     // 获取包围盒 暴力法 寻找三角形顶点中最大的x值与y值，则包围盒的一个上界为[0, x]*[0, y]
     // 更高级的方法: 旋转卡壳算法
     int max_x = 0, max_y = 0;
-    std::vector<Vector2f> tri(3);
+    std::vector<Vector2f> tri;
     for (Eigen::Vector4f vertex : v) {
         Vector2f point = {vertex[0], vertex[1]};
         tri.push_back(point);
@@ -139,7 +137,6 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     for (int i = 0; i <= max_x; i++) {
         for (int j = 0; j <= max_y; j++) {
             if (insideTriangle(i, j, tri)) {
-                std::cout << "Inside triangle" << std::endl;
                 // 获取深度插值
                 auto[alpha, beta, gamma] = computeBarycentric2D(i, j, t.v);
                 float w_reciprocal = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
@@ -147,7 +144,6 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
                 z_interpolated *= w_reciprocal;
                 // 深度检测
                 if (z_interpolated < depth_buf[i * j]) {
-                    std::cout << "update depth" << std::endl;
                     // 更新深度
                     depth_buf[i * j] = z_interpolated;
                     // 像素点着色

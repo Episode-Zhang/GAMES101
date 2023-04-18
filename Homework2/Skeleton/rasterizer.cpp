@@ -143,9 +143,10 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
                 float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
                 z_interpolated *= w_reciprocal;
                 // 深度检测
-                if (z_interpolated < depth_buf[i * j]) {
+                int index = i * width + j - 1;
+                if (z_interpolated < depth_buf[index]) {
                     // 更新深度
-                    depth_buf[i * j] = z_interpolated;
+                    depth_buf[index] = z_interpolated;
                     // 像素点着色
                     Eigen::Vector3f pixel_point = {(float) i, (float) j, 1};
                     set_pixel(pixel_point, t.getColor());

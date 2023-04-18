@@ -53,7 +53,7 @@ Eigen::Matrix4f get_camera_world_basis(Eigen::Vector3f eye_gaze, Eigen::Vector3f
 Eigen::Matrix4f get_model_matrix(float rotation_angle)
 {
     Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
-    return  model;
+    return model;
 }
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)

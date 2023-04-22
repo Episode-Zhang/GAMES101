@@ -4,31 +4,23 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <cmath>
+using namespace Eigen;
 
 constexpr double MY_PI = 3.1415926;
 
 // move camera to eye position
-Eigen::Matrix4f get_view_matrix(Eigen::Vector3f eye_pos)
+Matrix4f get_view_matrix(Vector3f eye_pos)
 {
-    Eigen::Matrix4f view = Eigen::Matrix4f::Identity();
-
-    Eigen::Matrix4f translate;
-    translate << 1, 0, 0, -eye_pos[0], 0, 1, 0, -eye_pos[1], 0, 0, 1,
-        -eye_pos[2], 0, 0, 0, 1;
-
-    view = translate * view;
-
+    Matrix4f view = Matrix4f::Identity();
     return view;
 }
 
-Eigen::Matrix4f get_camera_matrix(Eigen::Vector3f eye_gaze,
-                                  Eigen::Vector3f eye_view_up,
-                                  Eigen::Vector3f eye_pos)
+Matrix4f get_camera_matrix(Vector3f eye_gaze, Vector3f eye_view_up, Vector3f eye_pos)
 {
-    Eigen::Vector3f w = -eye_gaze * (1.0f / eye_gaze.norm());
-    Eigen::Vector3f u = eye_view_up.cross(w) * (1.0f / (eye_view_up.cross(w)).norm());
-    Eigen::Vector3f v = w.cross(u);
-    Eigen::Matrix4f camera_to_world {
+    Vector3f w = -eye_gaze * (1.0f / eye_gaze.norm());
+    Vector3f u = eye_view_up.cross(w) * (1.0f / (eye_view_up.cross(w)).norm());
+    Vector3f v = w.cross(u);
+    Matrix4f camera_to_world {
             {u[0], v[0], w[0], eye_pos[0]},
             {u[1], v[1], w[1], eye_pos[1]},
             {u[2], v[2], w[2], eye_pos[2]},
@@ -37,75 +29,70 @@ Eigen::Matrix4f get_camera_matrix(Eigen::Vector3f eye_gaze,
     return camera_to_world.inverse();
 }
 
-Eigen::Matrix4f get_camera_world_basis(Eigen::Vector3f eye_gaze,
-                                       Eigen::Vector3f eye_view_up)
+Matrix4f get_model_matrix(float rotation_angle)
 {
-    Eigen::Vector3f w = -eye_gaze * (1.0f / eye_gaze.norm());
-    Eigen::Vector3f u = eye_view_up.cross(w) * (1.0f / (eye_view_up.cross(w)).norm());
-    Eigen::Vector3f v = w.cross(u);
-    Eigen::Matrix4f camera_world_basis {
-        {u[0], v[0], w[0], 0},
-        {u[1], v[1], w[1], 0},
-        {u[2], v[2], w[2], 0},
-        {0, 0, 0, 1},
-    };
-    return camera_world_basis;
-}
-
-Eigen::Matrix4f get_model_matrix(float rotation_angle)
-{
-    Eigen::Matrix4f model = Eigen::Matrix4f::Identity();
+    Matrix4f model = Matrix4f::Identity();
+    /*
+     * Since MVP transformation takes Model transformation as its first step,
+     * considering the part of "Viewing Transformation" introduced in Tiger Book,
+     * we know all transformations start with camera transformation, aka, in
+     * fact we are using camera to observe the whole scene(or, world). So all
+     * transformations we did should be *CAPTURED* in the *CAMERA WORLD*.
+     * Mathematically saying, we should process all vertices' coordinates from
+     * world coordinates into camera coordinates. Thus, here, in the function of
+     * the model transformation, we do camera transformation.
+     */
+    // camera transformation
+    // transform all triangle vertices coordinates into camera-coord system
+    Vector3f eye_gaze = {0, 0, 1}; // eye gaze in +z direction
+    Vector3f eye_view_up = { 0, 1, 0 }; // head-up pos in +y direction
+    Vector3f eye_pos = {0, 0, 5}; // see main function
+    Matrix4f to_cam_coord_mat = get_camera_matrix(eye_gaze, eye_view_up, eye_pos);
     // Model Transformation
     // using rad mode
     float rotation_angle_rad = rotation_angle / 180.0f * (float) MY_PI;
     // calc rotation mat
-    Eigen::Matrix4f rotation_mat {
+    Matrix4f rotation_mat {
         {cos(rotation_angle_rad), -sin(rotation_angle_rad), 0, 0},
         {sin(rotation_angle_rad), cos(rotation_angle_rad), 0, 0},
         {0, 0, 1, 0},
         {0, 0, 0, 1},
     };
-    // do rotation in camera world
-    Eigen::Vector3f eye_gaze(0, 0, 1); // eye look up +z direction actually
-    Eigen::Vector3f eye_view_up(0, 1, 0);
-    Eigen::Matrix4f camera_basis = get_camera_world_basis(eye_gaze, eye_view_up);
     // merge
-    model = camera_basis * rotation_mat * model;
+    model = rotation_mat * to_cam_coord_mat * model;
     return model;
 }
 
-Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio,
-                                      float zNear, float zFar)
+Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
 {
-    Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
+    Matrix4f projection = Matrix4f::Identity();
     // calculate related parameters
-    // Camera Transformation Matrix
-    // Since zNear and zFar are both positive
-    // We need to make it gaze to -z direction
-    // To achieve this, we do camera transformation
-    Eigen::Vector3f eye_gaze(0, 0, 1); // eye look up +z direction actually
-    Eigen::Vector3f eye_view_up(0, 1, 0);
-    Eigen::Vector3f eye_pos(0, 0, 5); // eye_pos is (0, 0, 5), see main() function
-    Eigen::Matrix4f camera_mat = get_camera_matrix(eye_gaze, eye_view_up, eye_pos);
     // Perspective Projection Mat
     float angle = eye_fov / 180 * (float) MY_PI;
     float t = fabs(zNear) * tan(angle / 2), b = -t;
     float r = (t - b) * aspect_ratio / 2.0f, l = -r;
-    Eigen::Matrix4f perspective_mat {
+    Matrix4f perspective_mat {
         {zNear, 0, 0, 0},
         {0, zNear, 0, 0},
         {0, 0, zNear + zFar, -zNear * zFar},
         {0, 0, 1, 0},
     };
     // Orthogonal Projection Mat
-    Eigen::Matrix4f orthogonal_mat {
+    Matrix4f orthogonal_mat {
         {2 / (r - l), 0, 0, -(l + r) / 2},
         {0, 2 / (t - b), 0, -(b + t) / 2},
         {0, 0, 2 / (zNear - zFar), -(zFar + zNear) / 2},
         {0, 0, 0, 1},
     };
+    // left-hand coordinate system
+    Matrix4f left_hand_mat {
+        {1, 0, 0, 0},
+        {0, 1, 0, 0},
+        {0, 0, -1, 0},
+        {0, 0, 0, 1},
+    };
     // merge
-    projection = orthogonal_mat * perspective_mat * camera_mat;
+    projection = left_hand_mat * orthogonal_mat * perspective_mat;
     return projection;
 }
 
@@ -125,11 +112,11 @@ int main(int argc, const char** argv)
 
     rst::rasterizer r(700, 700);
 
-    Eigen::Vector3f eye_pos = {0, 0, 5};
+    Vector3f eye_pos = {0, 0, 5};
 
-    std::vector<Eigen::Vector3f> pos{{2, 0, -2}, {0, 2, -2}, {-2, 0, -2}};
+    std::vector<Vector3f> pos{{2, 0, -2}, {0, 2, -2}, {-2, 0, -2}};
 
-    std::vector<Eigen::Vector3i> ind{{0, 1, 2}};
+    std::vector<Vector3i> ind{{0, 1, 2}};
 
     auto pos_id = r.load_positions(pos);
     auto ind_id = r.load_indices(ind);
